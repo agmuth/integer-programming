@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "intprog"
+version = "0.1.0"
+description = "algorithms for integer programming"
+authors = ["Andrew Muth <agmuth@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+linprog = {git = "https://github.com/agmuth/linear-programming.git"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
