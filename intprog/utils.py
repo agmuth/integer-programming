@@ -7,7 +7,7 @@ def is_integer(x: np.array):
 
 
 def get_fractional_parts(x: np.array):
-    return x - np.array(x).astype(np.int32)
+    return x - np.floor(x)
 
 
 def get_index_of_most_fractional_variable(x: np.array):

@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from intprog.branch_and_bound import BranchAndBound
+from intprog.cutting_plane import CuttingPlane
 from tests.problems import TEST_PROBLEMS
 
 
 @pytest.mark.parametrize("problem", TEST_PROBLEMS)
-def test_branch_and_bound(problem):
-    solver = BranchAndBound(
+def test_cutting_plane(problem):
+    solver = CuttingPlane(
         c=problem.c, A=problem.A, b=problem.b, lb=problem.lb, ub=problem.ub
     )
     res = solver.solve()

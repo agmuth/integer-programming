@@ -26,15 +26,16 @@ test_problem_1 = IntProgTestProblem(
 test_problem_2 = IntProgTestProblem(
     # pg. 288 linear programming and network flows
     c=np.array([3, 4, 0, 0]),
-    A=np.hstack([np.array([[3, 4], [1, 2]]), -1 * np.eye(2)]),
+    A=np.hstack([np.array([[3, 1], [1, 2]]), -1 * np.eye(2)]),
     b=np.array([4, 4]),
-    lb=np.array([1, 1, 0, 0]),
+    # lb=np.array([1, 1, 0, 0]),
+    lb=np.array([0, 0, 0, 0]),
     ub=np.repeat(np.inf, 4),
     x=np.array(
         [
             2.0,
             1.0,
-            6.0,
+            3.0,
             0.0,
         ]
     ),

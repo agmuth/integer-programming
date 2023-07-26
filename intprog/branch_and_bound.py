@@ -3,14 +3,30 @@ from linprog.dual_solvers import DualRevisedSimplexSolver
 from linprog.exceptions import DualIsUnboundedError
 from linprog.preprocessing import ProblemPreprocessingUtils
 from linprog.special_solvers import PrimalDualAlgorithm
-from sortedcontainers import SortedList
 
 from intprog.data_classes import IntProgReturnObj, StandardFormLinProg
 from intprog.utils import get_index_of_most_fractional_variable, is_integer
 
 
 class BranchAndBound:
+    """Branch and bound algorithm for pure linear integer programming probelms."""
+
     def __init__(self, c, A, b, lb, ub):
+        """Assumes LP is passed in in standard form (min c'x sbj. Ax = b, lb <= x <= ub)
+
+        Parameters
+        ----------
+        c : np.array
+            (n,) cost vector
+        A : np.array
+            (m, n) matrix defining linear combinations subject to equality constraints.
+        b : np.array
+            (m,) vector defining the equality constraints.
+        lb : np.array
+            (n,) vector specifying lower bounds on x. -np.inf indicates variable is unbounded below.
+        ub : np.array
+            (n,) vector specifying lower bounds on x. +np.inf indicates variable is unbounded above.
+        """
         (
             self.c,
             self.A,
@@ -19,14 +35,22 @@ class BranchAndBound:
             c, A, b, lb, ub
         )
         self.m, self.n = A.shape
-        self.problems = list()
         self.best_feasible_soln = None
         self.optimal_cost_upper_bound = np.inf
         self.optimal_cost_lower_bound = np.inf
         self.counter = -1
         self.optimum = False
 
-    def solve(self, maxiters: int = 100, tol: float = 1e-3):
+    def _get_return_value(self):
+        return IntProgReturnObj(
+            self.best_feasible_soln,
+            self.optimal_cost_upper_bound,
+            self.optimum,
+            self.counter,
+        )
+
+    def solve(self, maxiters: int = 100):
+        sub_problems = list()
         solver = PrimalDualAlgorithm(self.c, self.A, self.b)
         res = solver.solve()
 
@@ -37,15 +61,15 @@ class BranchAndBound:
             np.array(self.b),
         )
 
-        # append problem and lower bound on cost as long as `self.problems` is a normal list
+        # append problem and lower bound on cost as long as `sub_problems` is a normal list
         # appending to and popping from the end corresponds to a depth first search strategy
-        self.problems += [(-1 * res.cost, sub_problem)]
+        sub_problems.append((res.cost, sub_problem))
 
-        while len(self.problems) > 0 and self.counter < maxiters:
+        while len(sub_problems) > 0 and self.counter < maxiters:
             self.counter += 1
             # depth first if `depth_first_search_flag`
             # best soln if `best_soln_search_flag`
-            _, sub_problem = self.problems.pop()
+            _, sub_problem = sub_problems.pop()
             solver = DualRevisedSimplexSolver(
                 sub_problem.c,
                 sub_problem.A,
@@ -60,18 +84,12 @@ class BranchAndBound:
 
             if res.cost <= self.optimal_cost_upper_bound:
                 # prune by bound (if above cond. is not true)
-                integer_vars = is_integer(res.x[: self.n])
-                if integer_vars.all():
+                if is_integer(res.x[: self.n]).all():
                     # prune by optimality
                     self.optimal_cost_upper_bound = res.cost
                     self.best_feasible_soln = res.x[
                         : self.n
                     ]  # omit added vars from branching
-
-                    self.problems = SortedList([problem for problem in self.problems])
-                    # self.problems is now a sorted list + therefore calling `.pop`
-                    # pops the subproblem with the best (best_soln_search_flag)
-                    # lower bound on the cost of the optimal soln
 
                 else:
                     # split along non-integer variable and add two new subproblems to list
@@ -84,10 +102,10 @@ class BranchAndBound:
                         res.basis, sub_problem.A.shape[1]
                     )
 
-                    self.problems += [
+                    sub_problems_to_add = [
                         (
-                            -1
-                            * res.cost,  # `res.cost` is a lower bound on the optimal soln of the sub problem
+                            # `res.cost` is a lower bound on the optimal soln of the sub problem
+                            res.cost,
                             StandardFormLinProg(
                                 updated_problem_dual_basis,
                                 *ProblemPreprocessingUtils.add_variables_bounds_to_coefficient_matrix(
@@ -98,12 +116,9 @@ class BranchAndBound:
                                     None,
                                 )
                             ),
-                        )
-                    ]
-
-                    self.problems += [
+                        ),
                         (
-                            -1 * res.cost,
+                            res.cost,
                             StandardFormLinProg(
                                 updated_problem_dual_basis,
                                 *ProblemPreprocessingUtils.add_variables_bounds_to_coefficient_matrix(
@@ -114,12 +129,13 @@ class BranchAndBound:
                                     ub_floor,
                                 )
                             ),
-                        )
+                        ),
                     ]
-        self.optimum = len(self.problems) == 0
-        return IntProgReturnObj(
-            self.best_feasible_soln,
-            self.optimal_cost_upper_bound,
-            self.optimum,
-            self.counter,
-        )
+                    sub_problems += sub_problems_to_add
+                    if self.optimal_cost_upper_bound < np.inf:
+                        # at least one feasible soln has been found 
+                        # -> switch from depth first search to best first search
+                        sub_problems.sort(reverse=True, key=lambda x: x[0])
+
+        self.optimum = len(sub_problems) == 0
+        return self._get_return_value()
